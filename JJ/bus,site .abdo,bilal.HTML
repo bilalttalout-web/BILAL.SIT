@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>تحديد مكان الحافلة</title>
+<link href="https://fonts.googleapis.com/css2?family=Cairo:wght@500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+<script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+<style>
+body { margin:0; font-family:"Cairo", sans-serif; text-align:center; }
+#welcome { display:flex; flex-direction:column; justify-content:center; align-items:center; height:100vh; background:#0a74d3; color:white; padding:10px; }
+#welcome h2 { font-size:clamp(18px,6vw,36px); font-weight:bold; color:black; text-shadow:1px 1px 2px rgba(0,0,0,0.3); margin-bottom:10px; }
+#welcome p { font-size:clamp(12px,3vw,16px); margin:5px 0; line-height:1.5; padding:0 10px; }
+#completeBtn { padding:10px 15px; font-size:clamp(12px,3vw,18px); border:none; border-radius:10px; background:white; color:#0a74d3; cursor:pointer; margin:10px 0; }
+#userInfo { display:none; flex-direction:column; justify-content:center; align-items:center; padding:10px; background:#0a74d3; color:white; min-height:100vh;}
+#userInfo input, #userInfo select, #userInfo button { padding:8px; font-size:clamp(12px,3vw,18px); border-radius:8px; border:none; margin-bottom:10px; text-align:center; width:80%; max-width:300px; }
+#userInfo button { background:white; color:#0a74d3; cursor:pointer; }
+#mainWrapper { display:none; flex:1; height:100vh; display:flex; flex-direction:row; max-width:100vw; overflow:hidden;}
+#map { flex:1; height:100%; opacity:0; transition: opacity 0.5s; max-width:100%; }
+.sidebar { width:250px; background:#fff; padding:10px; display:flex; flex-direction:column; box-shadow: -2px 0 8px rgba(0,0,0,0.1); }
+.box { background:white; padding:10px; border-radius:12px; margin-bottom:10px; box-shadow:0 4px 10px rgba(0,0,0,0.1); display:flex; justify-content:space-between; align-items:center; cursor:pointer; opacity:0; transform: translateY(20px); transition: all 0.3s ease; font-size:clamp(12px,3vw,18px);}
+.box.show { opacity:1; transform: translateY(0);}
+.box:hover { transform: scale(1.03); box-shadow:0 6px 15px rgba(0,0,0,0.2);}
+.box.active { background:#a8e6a1; transform: scale(1.05); }
+.messageOverlay { position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); color:white; display:flex; justify-content:center; align-items:center; font-size:clamp(18px,8vw,40px); font-weight:bold; z-index:1000; display:none; }
+.floating-buttons { position:fixed; bottom:15px; left:15px; display:flex; flex-direction:column; gap:10px; z-index:999; }
+.floating-buttons a { display:flex; align-items:center; justify-content:center; width:45px; height:45px; border-radius:50%; color:white; font-size:20px; box-shadow:0 4px 10px rgba(0,0,0,0.3); text-decoration:none; }
+.floating-buttons a.whatsapp { background:#25D366; }
+.floating-buttons a.instagram { background:#E1306C; }
+
+@media (max-width:800px){
+  #mainWrapper { flex-direction:column; }
+  .sidebar { width:100%; flex-direction:row; overflow-x:auto; padding:5px; box-shadow:none;}
+  .box { min-width:90px; margin-right:10px; margin-bottom:0;}
+  #map { height:250px; }
+}
+</style>
+</head>
+<body>
+
+<!-- صفحة الترحيب -->
+<div id="welcome">
+    <h2>🚍 طوبيس ورزازات</h2>
+    <p>Thank you, Professor Ismail Sghir, for your idea.</p>
+    <button id="completeBtn" onclick="showUserForm()">اكمل</button>
+    <p>
+        فكرة الموقع تقوم على تسهيل تتبع الحافلات، بحيث يمكنك رؤية مكان حافلتك مباشرة من منزلك، 
+        مما يوفر الوقت ويقلل من الانتظار والعناء. نود إعلامكم أن المشروع لا يزال في مرحلة التطوير، 
+        ونعمل جاهدين لتحسينه وتقديم أفضل تجربة ممكنة. نشكركم على تفهّمكم وصبركم.
+    </p>
+</div>
+
+<!-- صفحة إدخال المستخدم -->
+<div id="userInfo">
+    <h1>أدخل اسمك</h1>
+    <input type="text" id="username" placeholder="اسمك هنا">
+    <h1>أدخل عمرك</h1>
+    <input type="number" id="age" placeholder="عمرك هنا">
+    <h1>اختر جنسك</h1>
+    <select id="gender">
+        <option value="ذكر">ذكر</option>
+        <option value="أنثى">أنثى</option>
+    </select>
+    <button onclick="startApp()">دخول</button>
+</div>
+
+<!-- صفحة الخريطة والخانات -->
+<div id="mainWrapper">
+    <div id="map"></div>
+    <div class="sidebar">
+        <div class="box" onclick="selectBox(this,'aitkdidf')"><div class="text">🚍 أيت كضيف</div></div>
+        <div class="box" onclick="selectBox(this,'fpo')"><div class="text">🚍 FPO OURZAZTE</div></div>
+        <div class="box" onclick="selectBox(this,'est')"><div class="text">🚍 EST</div></div>
+        <div class="box" onclick="selectBox(this,'tamasint')"><div class="text">🚍 تماسينت</div></div>
+        <div class="box" onclick="selectBox(this,'tabount')"><div class="text">🚍 تابونت</div></div>
+    </div>
+</div>
+
+<div class="floating-buttons" id="mainButtons">
+    <a class="whatsapp" href="https://wa.me/212779985378" target="_blank"><i class="fa-brands fa-whatsapp"></i></a>
+    <a class="instagram" href="https://www.instagram.com/bilal.talout.33/" target="_blank"><i class="fa-brands fa-instagram"></i></a>
+</div>
+
+<div class="messageOverlay" id="messageOverlay">نتا أحسن رجاوي</div>
+
+<script>
+// التعامل مع صفحات الترحيب والمستخدم
+function showUserForm(){
+    document.getElementById('welcome').style.display='none';
+    document.getElementById('userInfo').style.display='flex';
+}
+
+// بيانات الطوبيس
+let mapInstance = null;
+let busMarker = null;
+const busLocations = {
+    "aitkdidf":[30.9355,-6.9075],
+    "fpo":[30.9248,-6.8922],
+    "est":[30.9400,-6.9100],
+    "tamasint":[30.9285,-6.9094],
+    "tabount":[30.9248,-6.8922]
+};
+const busIcon = L.icon({
+    iconUrl: 'https://cdn-icons-png.flaticon.com/512/61/61231.png',
+    iconSize: [40,40],
+    iconAnchor: [20,40],
+    popupAnchor: [0,-35]
+});
+
+function initMap(lat,lng){
+    const mapDiv = document.getElementById('map');
+    mapDiv.style.opacity=0;
+    if(!mapInstance){
+        mapInstance=L.map('map').setView([lat,lng],14);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{ maxZoom:19 }).addTo(mapInstance);
+        busMarker = L.marker([lat,lng], {icon: busIcon}).addTo(mapInstance).bindPopup("🚍 الطوبيس هنا");
+    }else{
+        mapInstance.setView([lat,lng],14);
+        busMarker.setLatLng([lat,lng]);
+    }
+    setTimeout(()=>{ mapDiv.style.opacity=1; },50);
+}
+
+function selectBox(element, boxKey){
+    element.classList.add('active');
+    setTimeout(()=>{ element.classList.remove('active'); },300);
+    document.querySelectorAll('.box').forEach(b=>{ if(b!==element) b.style.background="white"; });
+    element.style.background="#a8e6a1";
+    initMap(busLocations[boxKey][0], busLocations[boxKey][1]);
+}
+
+function animateButtons(){
+    const buttons=document.querySelectorAll('.floating-buttons a');
+    buttons.forEach((btn,i)=>{ setTimeout(()=>{ btn.style.transform="translateY(0)"; btn.style.opacity=1; },i*150); });
+}
+
+function animateBoxes(){
+    const boxes=document.querySelectorAll('.box');
+    boxes.forEach((box,i)=>{ setTimeout(()=>{ box.classList.add('show'); },i*200); });
+}
+
+function showMessage(){
+    const msg=document.getElementById('messageOverlay');
+    msg.style.display='flex';
+    setTimeout(()=>{ msg.style.display='none'; },1500);
+}
+
+// بدء التطبيق
+function startApp(){
+    const name=document.getElementById('username').value.trim();
+    const age=document.getElementById('age').value.trim();
+    const gender=document.getElementById('gender').value;
+    if(name==="" || age===""){ alert("المرجو إدخال الاسم والعمر!"); return; }
+    localStorage.setItem('username',name);
+    localStorage.setItem('age',age);
+    localStorage.setItem('gender',gender);
+    document.getElementById('userInfo').style.display='none';
+    document.getElementById('mainWrapper').style.display='flex';
+    animateBoxes();
+    animateButtons();
+}
+</script>
+
+</body>
+</html>
